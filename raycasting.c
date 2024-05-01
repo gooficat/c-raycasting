@@ -13,19 +13,31 @@ Uint32 *pixels;
 
 bool keys[SDL_NUM_SCANCODES];
 
+#define UPSCALE 2
+
 Uint32 rgb(int r, int g, int b) {
-	return (r << 16) | (g << 8) | b;
+    return (r << 16) | (g << 8) | b;
 }
 
 void pixel(int x, int y, Uint32 c) {
-	if (x > WIDTH || y > HEIGHT) return;
-	pixels[y * WIDTH + x] = c;
+    if (x >= WIDTH || y >= HEIGHT) return;
+
+    // Calculate the new coordinates after upscaling
+    int newX = x * UPSCALE;
+    int newY = y * UPSCALE;
+
+    // Set the color to all pixels in the upscaled block
+    for (int i = 0; i < UPSCALE; i++) {
+        for (int j = 0; j < UPSCALE; j++) {
+            pixels[(newY + i) * (WIDTH * UPSCALE) + (newX + j)] = c;
+        }
+    }
 }
 
 void vertical(int x, int h, Uint32 c) {
-	for (int i = 0; i < h; i++) {
-		pixel(x, HEIGHT/2 - h/2 + i, c);
-	}
+    for (int i = 0; i < h; i++) {
+        pixel(x, HEIGHT/2 - h/2 + i, c);
+    }
 }
 
 float px = WIDTH/2;
@@ -35,21 +47,31 @@ float pR = 0;
 #define BLOCK_SIZE 80
 
 int level[] = {
-	1,1,1,1,1,1,1,1,
-	1,0,0,0,0,0,0,1,
-	1,0,0,1,1,1,0,1,
-	1,0,0,0,0,1,0,1,
-	1,1,0,0,0,0,0,1,
-	1,0,0,1,0,0,0,1,
-	1,0,0,0,0,0,0,1,
-	1,1,1,1,1,1,1,1,
+    1,1,1,1,1,1,1,1,
+    1,1,0,0,0,0,0,1,
+    1,0,0,1,1,1,0,1,
+    1,0,0,0,0,1,0,1,
+    1,1,0,0,0,0,0,1,
+    1,0,0,1,0,0,0,1,
+    1,0,0,0,1,0,0,1,
+    1,1,1,1,1,1,1,1,
 };
 
+int clamp(int value, int min, int max) {
+    if (value < min) {
+        return min;
+    } else if (value > max) {
+        return max;
+    } else {
+        return value;
+    }
+}
+
 bool coll(int x, int y) {
-	if (level[y/BLOCK_SIZE * 8 + x/BLOCK_SIZE]) {
-		return true;
-	}
-	return false;
+    if (level[y/BLOCK_SIZE * 8 + x/BLOCK_SIZE]) {
+        return true;
+    }
+    return false;
 }
 
 
@@ -78,15 +100,15 @@ void rayCast() {
         if (rL != 0) {
 
             int lineHeight = HEIGHT / (0.02 * rL);
-            
+
             lineHeight = (lineHeight > HEIGHT) ? HEIGHT : lineHeight;
-            vertical(i * samplingFactor, lineHeight, rgb(0, 20, 200));
+            vertical(i * samplingFactor, lineHeight, rgb(0, 0, clamp((lineHeight) * 3, 0, 255)));
         }
     }
 }
 
 
-double spd = 16;
+double spd = 8;
 double rSpd = 0.2;
 void movePlayer(double delta) {
     float newX = px;
@@ -130,18 +152,18 @@ void movePlayer(double delta) {
 
 int main(int argc, char *argv[]) {
     SDL_VideoInit(NULL);
-    window = SDL_CreateWindow("SDL2 Window", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH, HEIGHT, SDL_WINDOW_SHOWN);
+    window = SDL_CreateWindow("SDL2 Window", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH*UPSCALE, HEIGHT*UPSCALE, SDL_WINDOW_SHOWN);
     surface = SDL_GetWindowSurface(window);
-    
-    
+
+
     Uint32 startTime = SDL_GetTicks();
     Uint32 prevTime = startTime;
     double deltaTime = 0.0;
     double delta;
-    
+
     bool quit = false;
     SDL_Event event;
-    
+
     while (!quit) {
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
@@ -156,23 +178,23 @@ int main(int argc, char *argv[]) {
                     break;
             }
         }
-        
+
         Uint32 currentTime = SDL_GetTicks();
         deltaTime = (currentTime - prevTime);
         prevTime = currentTime;
-        
+
         delta = deltaTime/60;
-        
+
         pixels = (Uint32*)surface->pixels;
-        memset(pixels, 0, WIDTH * HEIGHT * sizeof(Uint32));
-		
-		movePlayer(delta);
-		rayCast();
-		
+        memset(pixels, 0, WIDTH * UPSCALE * (HEIGHT * UPSCALE) * sizeof(Uint32));
+
+        movePlayer(delta);
+        rayCast();
+
         SDL_UpdateWindowSurface(window);
     }
-    
-    
+
+
 
     SDL_FreeSurface(surface);
     SDL_DestroyWindow(window);
